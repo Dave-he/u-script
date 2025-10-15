@@ -5,5 +5,6 @@ config-dev.ini      export-ignore
 README.md           export-ignore  
 requirements.txt    export-ignore  # 排除单个文件
 docs/               export-ignore  # 排除整个目录
+docs                export-ignore
 test-data/          export-ignore  # 排除整个目录
 *.log               export-ignore  # 排除所有 .log 后缀文件（即使被 Git 跟踪）
