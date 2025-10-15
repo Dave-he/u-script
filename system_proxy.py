@@ -199,7 +199,7 @@ class SystemProxyManager:
             if http_proxy or https_proxy:
                 proxy = http_proxy or https_proxy
                 # 移除协议前缀
-                if proxy.startswith(('http://', 'https://')):
+                if proxy and proxy.startswith(('http://', 'https://')):
                     proxy = proxy.split('://', 1)[1]
                 return True, proxy
             
@@ -217,42 +217,76 @@ class SystemProxyManager:
             os.environ['https_proxy'] = proxy_with_protocol
             os.environ['HTTP_PROXY'] = proxy_with_protocol
             os.environ['HTTPS_PROXY'] = proxy_with_protocol
+            # 添加 no_proxy 避免本地地址走代理
+            os.environ['no_proxy'] = 'localhost,127.0.0.1,::1'
+            os.environ['NO_PROXY'] = 'localhost,127.0.0.1,::1'
             
-            # 尝试写入到shell配置文件
-            shell_configs = [
-                os.path.expanduser('~/.bashrc'),
-                os.path.expanduser('~/.zshrc'),
-                os.path.expanduser('~/.profile')
-            ]
+            # 检测当前使用的shell
+            current_shell = os.environ.get('SHELL', '/bin/bash')
+            shell_name = os.path.basename(current_shell)
             
-            proxy_lines = [
-                f'export http_proxy="{proxy_with_protocol}"',
-                f'export https_proxy="{proxy_with_protocol}"',
-                f'export HTTP_PROXY="{proxy_with_protocol}"',
-                f'export HTTPS_PROXY="{proxy_with_protocol}"'
-            ]
+            # 根据shell类型选择配置文件
+            if shell_name == 'zsh':
+                config_file = os.path.expanduser('~/.zshrc')
+            elif shell_name == 'fish':
+                config_file = os.path.expanduser('~/.config/fish/config.fish')
+            else:
+                config_file = os.path.expanduser('~/.bashrc')
             
-            for config_file in shell_configs:
+            # 准备代理设置行
+            if shell_name == 'fish':
+                proxy_lines = [
+                    f'set -gx http_proxy "{proxy_with_protocol}"',
+                    f'set -gx https_proxy "{proxy_with_protocol}"',
+                    f'set -gx HTTP_PROXY "{proxy_with_protocol}"',
+                    f'set -gx HTTPS_PROXY "{proxy_with_protocol}"',
+                    f'set -gx no_proxy "localhost,127.0.0.1,::1"',
+                    f'set -gx NO_PROXY "localhost,127.0.0.1,::1"'
+                ]
+                proxy_patterns = ['set -gx http_proxy', 'set -gx https_proxy', 'set -gx HTTP_PROXY', 'set -gx HTTPS_PROXY', 'set -gx no_proxy', 'set -gx NO_PROXY']
+            else:
+                proxy_lines = [
+                    f'export http_proxy="{proxy_with_protocol}"',
+                    f'export https_proxy="{proxy_with_protocol}"',
+                    f'export HTTP_PROXY="{proxy_with_protocol}"',
+                    f'export HTTPS_PROXY="{proxy_with_protocol}"',
+                    f'export no_proxy="localhost,127.0.0.1,::1"',
+                    f'export NO_PROXY="localhost,127.0.0.1,::1"'
+                ]
+                proxy_patterns = ['http_proxy=', 'https_proxy=', 'HTTP_PROXY=', 'HTTPS_PROXY=', 'no_proxy=', 'NO_PROXY=']
+            
+            try:
+                # 读取现有配置
                 if os.path.exists(config_file):
-                    try:
-                        with open(config_file, 'r') as f:
-                            content = f.read()
-                        
-                        # 移除旧的代理设置
-                        lines = content.split('\n')
-                        new_lines = [line for line in lines if not any(
-                            proxy_var in line for proxy_var in ['http_proxy=', 'https_proxy=', 'HTTP_PROXY=', 'HTTPS_PROXY=']
-                        )]
-                        
-                        # 添加新的代理设置
-                        new_lines.extend(proxy_lines)
-                        
-                        with open(config_file, 'w') as f:
-                            f.write('\n'.join(new_lines))
-                        
-                        break
-                    except Exception:
-                        continue
+                    with open(config_file, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                else:
+                    content = ""
+                
+                # 移除旧的代理设置
+                lines = content.split('\n')
+                new_lines = [line for line in lines if not any(
+                    pattern in line for pattern in proxy_patterns
+                )]
+                
+                # 添加代理设置注释和新设置
+                new_lines.append('')
+                new_lines.append('# Proxy settings added by system_proxy.py')
+                new_lines.extend(proxy_lines)
+                new_lines.append('')
+                
+                # 写入配置文件
+                with open(config_file, 'w', encoding='utf-8') as f:
+                    f.write('\n'.join(new_lines))
+                
+                print(f"✅ 代理设置已写入: {config_file}")
+                print(f"💡 请执行以下命令使代理生效:")
+                print(f"   source {config_file}")
+                print(f"   或重新启动终端")
+                
+            except Exception as e:
+                print(f"⚠️  写入配置文件失败: {e}")
+                print("💡 代理已在当前会话中设置，重启终端后将失效")
             
             return True
         except Exception:
