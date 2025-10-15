@@ -1,7 +1,7 @@
 # .gitattributes 文件内容
-config-dev.ini          export-ignore 
-.gitignore              export-ignore
-.gitmodules             export-ignore
+.gitignore      export-ignore  # 排除 .gitignore
+.gitmodules     export-ignore  # 排除 .gitmodules
+.gitattributes  export-ignore  # 排除自身
 README.md               export-ignore  
 requirements.txt        export-ignore  
 requirements-dev.txt    export-ignore  
